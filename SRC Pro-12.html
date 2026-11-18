@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Practicum 12 - Nanotech Endpoint Data Management</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #f1f5f9; color: #1e293b; padding: 1.5rem; }
+    .container { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.25rem; }
+
+    header { background: linear-gradient(135deg, #0f172a, #0284c7); color: #fff; padding: 1.25rem; border-radius: 8px; }
+    header h1 { font-size: 1.35rem; }
+    header p { font-size: 0.85rem; color: #bae6fd; margin-top: 0.25rem; }
+
+    .card { background: #fff; padding: 1.25rem; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+    h2 { font-size: 1.1rem; color: #0284c7; margin-bottom: 0.85rem; }
+
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.75rem; align-items: end; }
+    label { display: block; font-size: 0.85rem; font-weight: bold; margin-bottom: 0.25rem; color: #334155; }
+    input, select { width: 100%; padding: 0.55rem; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 0.92rem; }
+
+    .btn { background: #0284c7; color: #fff; border: none; padding: 0.58rem 1rem; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 0.9rem; }
+    .btn:hover { background: #0369a1; }
+    .btn-refresh { background: #0f172a; }
+    .btn-edit { background: #d97706; padding: 0.35rem 0.65rem; font-size: 0.8rem; }
+    .btn-delete { background: #dc2626; padding: 0.35rem 0.65rem; font-size: 0.8rem; }
+
+    .status-bar { padding: 0.65rem 1rem; border-radius: 5px; font-size: 0.9rem; font-weight: bold; background: #e0f2fe; color: #0369a1; }
+    .status-error { background: #fee2e2; color: #b91c1c; }
+    .status-success { background: #dcfce7; color: #15803d; }
+
+    .table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { border: 1px solid #e2e8f0; padding: 0.6rem 0.75rem; text-align: left; }
+    th { background: #f8fafc; color: #0f172a; }
+    .actions { display: flex; gap: 0.4rem; }
+
+    @media (max-width: 680px) { .form-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>Nanotechnology Healthcare &amp; Energy Endpoint Manager</h1>
+      <p>Practicum No. 12: REST API Endpoint Data Management (Fetch API CRUD) | JASWANT D (URK26CS1188)</p>
+    </header>
+
+    <div id="statusBar" class="status-bar">Ready to sync with REST API endpoint...</div>
+
+    <section class="card">
+      <h2 id="formTitle">Add Nanomaterial Research Record (POST / PUT)</h2>
+      <form id="endpointForm" novalidate>
+        <input type="hidden" id="recordId">
+        <div class="form-grid">
+          <div>
+            <label for="nanoTitle">Nanomaterial / System Name</label>
+            <input type="text" id="nanoTitle" placeholder="e.g., Quantum Dot Solar Cell (CdSe)" required>
+          </div>
+          <div>
+            <label for="nanoDomain">Application Domain &amp; Efficiency</label>
+            <input type="text" id="nanoDomain" placeholder="e.g., Clean Energy - 26.4% PCE" required>
+          </div>
+          <button type="submit" id="saveBtn" class="btn">Create Record</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="table-header">
+        <h2>Live Endpoint Records (GET / DELETE)</h2>
+        <button id="refreshBtn" class="btn btn-refresh">Fetch Latest (GET)</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Nanomaterial / System</th>
+            <th>Domain &amp; Specification</th>
+            <th>Endpoint Actions</th>
+          </tr>
+        </thead>
+        <tbody id="recordsBody"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    const API_URL = "https://jsonplaceholder.typicode.com/posts";
+    const statusBar = document.getElementById("statusBar");
+    const recordsBody = document.getElementById("recordsBody");
+    const endpointForm = document.getElementById("endpointForm");
+    const recordIdInput = document.getElementById("recordId");
+    const nanoTitleInput = document.getElementById("nanoTitle");
+    const nanoDomainInput = document.getElementById("nanoDomain");
+    const saveBtn = document.getElementById("saveBtn");
+    const formTitle = document.getElementById("formTitle");
+    const refreshBtn = document.getElementById("refreshBtn");
+
+    let localRecords = [
+      { id: 1, title: "Lipid Nanoparticle Carrier (LNP-01)", body: "Healthcare - Targeted Drug Delivery (94% uptake)" },
+      { id: 2, title: "Perovskite Quantum Dot Cell", body: "Energy - High-Efficiency Photovoltaics (26.8%)" },
+      { id: 3, title: "Graphene Supercapacitor Electrode", body: "Energy Storage - Fast-Charging Nanobattery" },
+      { id: 4, title: "Gold Nanoparticle Biosensor", body: "Healthcare - Rapid Pathogen Diagnostics" }
+    ];
+
+    function setStatus(message, type = "info") {
+      statusBar.textContent = message;
+      statusBar.className = "status-bar";
+      if (type === "error") statusBar.classList.add("status-error");
+      if (type === "success") statusBar.classList.add("status-success");
+    }
+
+    function renderTable() {
+      recordsBody.innerHTML = "";
+      localRecords.forEach(item => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${item.id}</td>
+          <td>${item.title}</td>
+          <td>${item.body}</td>
+          <td class="actions">
+            <button class="btn btn-edit" onclick="editRecord(${item.id})">Edit (PUT)</button>
+            <button class="btn btn-delete" onclick="deleteRecord(${item.id})">Delete</button>
+          </td>
+        `;
+        recordsBody.appendChild(tr);
+      });
+    }
+
+    async function fetchRecords() {
+      setStatus("Fetching records from endpoint (GET)...");
+      try {
+        const response = await fetch(`${API_URL}?_limit=4`);
+        if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+        await response.json();
+        renderTable();
+        setStatus(`GET Success (HTTP ${response.status}): Loaded ${localRecords.length} nanotech endpoint records.`, "success");
+      } catch (err) {
+        renderTable();
+        setStatus(`Endpoint Warning (${err.message}) — Showing cached local dataset.`, "error");
+      }
+    }
+
+    endpointForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const title = nanoTitleInput.value.trim();
+      const body = nanoDomainInput.value.trim();
+      const editId = recordIdInput.value;
+
+      if (title.length < 3 || body.length < 3) {
+        setStatus("Validation Error: Both fields must contain at least 3 characters.", "error");
+        return;
+      }
+
+      if (editId) {
+        setStatus(`Updating record #${editId} via PUT...`);
+        try {
+          const response = await fetch(`${API_URL}/${editId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: Number(editId), title, body, userId: 1 })
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          await response.json();
+
+          const idx = localRecords.findIndex(r => r.id === Number(editId));
+          if (idx !== -1) localRecords[idx] = { id: Number(editId), title, body };
+          renderTable();
+          resetForm();
+          setStatus(`PUT Success (HTTP ${response.status}): Updated record #${editId}.`, "success");
+        } catch (err) {
+          setStatus(`PUT Failed: ${err.message}`, "error");
+        }
+      } else {
+        setStatus("Sending new record via POST...");
+        try {
+          const response = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title, body, userId: 1 })
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const data = await response.json();
+
+          const nextId = localRecords.length ? Math.max(...localRecords.map(r => r.id)) + 1 : 1;
+          localRecords.push({ id: nextId, title: data.title, body: data.body });
+          renderTable();
+          resetForm();
+          setStatus(`POST Success (HTTP ${response.status}): Created nanotech record #${nextId}.`, "success");
+        } catch (err) {
+          setStatus(`POST Failed: ${err.message}`, "error");
+        }
+      }
+    });
+
+    window.editRecord = function(id) {
+      const rec = localRecords.find(r => r.id === id);
+      if (!rec) return;
+      recordIdInput.value = rec.id;
+      nanoTitleInput.value = rec.title;
+      nanoDomainInput.value = rec.body;
+      saveBtn.textContent = "Update Record";
+      formTitle.textContent = `Editing Record #${rec.id} (PUT)`;
+    };
+
+    window.deleteRecord = async function(id) {
+      setStatus(`Deleting record #${id} via DELETE...`);
+      try {
+        const response = await fetch(`${API_URL}/${id}`, { method: "DELETE" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        localRecords = localRecords.filter(r => r.id !== id);
+        renderTable();
+        setStatus(`DELETE Success (HTTP ${response.status}): Removed record #${id}.`, "success");
+      } catch (err) {
+        setStatus(`DELETE Failed: ${err.message}`, "error");
+      }
+    };
+
+    function resetForm() {
+      endpointForm.reset();
+      recordIdInput.value = "";
+      saveBtn.textContent = "Create Record";
+      formTitle.textContent = "Add Nanomaterial Research Record (POST / PUT)";
+    }
+
+    refreshBtn.addEventListener("click", fetchRecords);
+    fetchRecords();
+  </script>
+</body>
+</html>
